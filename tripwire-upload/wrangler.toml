@@ -1,0 +1,21 @@
+# The Worker keeps its original name so the web address does not change.
+name = "trove-guardian"
+main = "src/worker.ts"
+compatibility_date = "2025-09-01"
+
+# Run the monitor once a minute.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trove-guardian"
+database_id = "PASTE-YOUR-DATABASE-ID-HERE"
+migrations_dir = "migrations"
+
+# Not secret. The two secrets (TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET) are set with `npx wrangler secret put`.
+[vars]
+MAX_TOTAL_TROVES = "100"
+DEMO_PRICE_DROP_PCT = ""
+BOT_USERNAME = "creationnbot"
+REPO_URL = ""
