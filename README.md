@@ -1,107 +1,128 @@
 # Tripwire
 
-Plan, watch and protect a Mezo MUSD loan. A Telegram bot that warns you before liquidation or redemption, a public JSON API and web pages, all read-only: no keys, no custody. Every action is a link to the Mezo app.
+**Know your liquidation line before you borrow, and get warned before you cross it.**
 
-(Formerly called Trove Guardian.)
+Tripwire is a free, read-only companion for [Mezo](https://mezo.org) MUSD loans: a **borrow planner**, a **Telegram bot**, a per-loan **dashboard** with a what-if slider, and a public **JSON API**. It covers the whole life of a loan: **plan, watch, fix**. Built for the Mezo Buildathon.
 
-## Status
+**Try it (Mezo testnet)**
 
-Done: Multicall engine (whole protocol in about 5 requests), redemption queue and Stability Pool maths, Telegram bot (/track, /status, /simulate, /alerts, /list, /untrack), alert engine, public API (`/api/system`, `/api/position`, `/api/prices`), landing page, rate limiting, local runner and a Cloudflare Worker version (D1 storage, webhook, once-a-minute cron). 140 unit tests. Deployed on Cloudflare Workers.
-In progress: borrow planner, French/Spanish/Portuguese.
+| | |
+|---|---|
+| Telegram bot | https://t.me/creationnbot |
+| Borrow planner | https://trove-guardian.gavriil.workers.dev/plan |
+| Check a loan | https://trove-guardian.gavriil.workers.dev/p |
+| Live API | https://trove-guardian.gavriil.workers.dev/api/system |
 
-## How it works
+![Tripwire architecture](docs/architecture.svg)
 
-Everything runs off one picture of the protocol, built with Multicall3:
+## The problem
 
-1. Every 5 minutes: a **full read** of the BTC price, the Stability Pool and every trove (`getTroveOwnersCount` and `getTroveFromTroveOwnersArray`, then `getEntireDebtAndColl` for each), saved in D1. About 5 requests for 255 troves.
-2. Every minute: **one small request** refreshes the price and the tracked addresses on top of that snapshot.
-3. The redemption queue, each trove's place in it, the MUSD ahead of it, the system ratio and the liquidation wall are all worked out in memory from that picture, so cost does not grow with the number of users.
+Borrowing MUSD against Bitcoin is simple until the price moves. A loan below 110% collateral can be liquidated, and the lowest-ratio loans are first in line to be redeemed. Most tools watch a loan you already have. Few help you choose how much to borrow in the first place, and none of that explains the risk in plain words to someone new.
 
-The queue follows the contract: redemptions go lowest collateral ratio first, skip loans already below 110%, and redeem debt net of the 200 MUSD gas deposit (`TroveManager.redeemCollateral`). Mezo's docs note that a partial redemption raises the borrower's ratio, so the bot calls it "exposure", not "risk".
+## What Tripwire does
 
-Free-plan limits shaped this: 50 outgoing requests and 10 ms CPU per run. The Multicall encoder and decoder are hand-written because the general-purpose one cost about 11 ms of CPU for a full read; the hand-written one is tested against viem on 120 random inputs and measured at about 3 to 5 ms in Node. Real production CPU is not yet measured (check `npx wrangler tail` for `Exceeded CPU`).
+**Plan.** Enter the BTC you would deposit and drag a caution slider. The planner shows what you would actually receive, the fee, total debt, liquidation price, how far BTC can fall, a year of interest, your place in today's redemption queue, and an estimated chance of liquidation. A table compares six caution levels side by side. When a choice would be refused, it says why in plain words and how much BTC would fix it.
 
-### Web dashboard and Telegram Mini App
+**Watch.** Send `/track <wallet address>` to the bot. It checks every minute and messages you when a loan moves into a riskier tier (watch, warning, urgent, liquidatable), when it recovers, or when it is among the first in the redemption queue. A 3-point buffer stops repeat messages when a ratio hovers near a line.
 
-`/p?a=0x...` is a mobile-first page for one loan: status, liquidation price, place in the redemption queue, a ruler showing where the ratio sits, and a **what-if slider** (BTC down 0% to 60%) that shows the new ratio and tier and how much collateral to add, or MUSD to repay, to get back to 135%, 150% or 200%. The bot's `/status`, `/simulate` and `/track` replies carry an **Open dashboard** button that opens it inside Telegram as a Mini App, and risky alerts link to it.
+**Fix.** `/simulate 30` (or the dashboard slider) shows what a 30% BTC fall does to your ratio and tier, and exactly how much collateral to add, or MUSD to repay, to get back to 135%, 150% or 200%. Every action is a link to Mezo's own app. Tripwire never touches your funds.
 
-The page is plain HTML plus one script served from the same origin (`/assets/position.js`), so it runs under a strict Content-Security-Policy with no inline scripts, no third-party code and no `eval`. API values are written into the page as text only. The slider maths is a pure function in that script, and the tests run the shipped file in Node and check it against the server's own `simulate` maths.
+Bot commands: `/track`, `/status`, `/plan`, `/simulate`, `/alerts`, `/list`, `/untrack`, `/help`. Replies carry an **Open dashboard** button that opens the web pages inside Telegram as a Mini App.
 
-### Public API
+## How it uses Mezo
 
-- `GET /api/system`: price, system ratio, Stability Pool, trove ratio buckets, the liquidation wall (debt exposed if BTC falls 5% to 60%, and whether the pool covers it) and the first 20 in the redemption queue.
+Everything comes from Mezo's contracts on testnet, with nothing hard-coded that the chain can tell us:
+
+- `TroveManager`: `getTroveOwnersCount`, `getTroveFromTroveOwnersArray`, `getEntireDebtAndColl`
+- `PriceFeed`: `fetchPrice`
+- `StabilityPool`: `getTotalMUSDDeposits`
+- `BorrowerOperations`: `minNetDebt`, `borrowingRate`
+- `InterestRateManager`: `interestRate`
+- **Multicall3**: the whole protocol (price, pool, loan terms and every trove) is read in about **5 requests**, so the hosted bot stays inside Cloudflare's free plan however many people use it.
+
+The rules are mirrored from the Mezo source, not guessed:
+
+- **Redemption queue** follows `TroveManager.redeemCollateral`: lowest collateral ratio first, loans already under 110% skipped, and debt redeemed net of the 200 MUSD gas deposit. The planner and dashboard show how much MUSD must be redeemed before yours.
+- **Loan rules** follow `BorrowerOperations.openTrove`: the fee is charged on the amount borrowed (waived in Recovery Mode), the 200 MUSD gas deposit is added to the debt, the minimum loan applies to amount plus fee, the ratio must clear 110% (150% in Recovery Mode), and a new loan cannot push the whole system below 150%.
+- **Recovery Mode** does not change the liquidation line (per Mezo's docs); it only blocks new loans below 150%.
+
+### How the numbers are produced
+
+1. Every 5 minutes: a full read of every trove, saved in Cloudflare D1.
+2. Every minute: one small request refreshes the price and the tracked loans on top of that snapshot.
+3. The redemption queue, each loan's place in it, the system ratio and the liquidation wall are worked out in memory, so cost does not grow with the number of users.
+
+The Multicall encoder and decoder are hand-written, because the general-purpose one cost about 11 ms of CPU for a full read (the free plan allows 10 ms per run). The hand-written version is tested against viem on 120 random inputs and measured at 3 to 5 ms in Node.
+
+### The estimate of liquidation chance
+
+The planner's "chance of liquidation" is a deliberately simple, openly stated model: BTC moves randomly with a yearly volatility you pick (calm 40%, typical 60%, wild 90%) and no trend, and the chance is that it touches your liquidation price at least once in the window: `2 x N(-ln(ratio / 1.1) / (sigma x sqrt(T)))`, the reflection principle. It ignores sudden jumps, so it understates real crash risk. The page says so. It is a guide for comparing choices, not a promise.
+
+## Public API
+
+- `GET /api/system`: BTC price, system ratio, Stability Pool, loans grouped by ratio, the **liquidation wall** (debt exposed if BTC falls 5% to 60%, and whether the Stability Pool could absorb it) and the first 20 in the redemption queue.
+- `GET /api/plan`: Mezo's live loan terms, the system totals, and every redeemable loan as `[ratio %, MUSD redemptions can take]`.
 - `GET /api/position?address=0x...`: one position with its liquidation price and queue place.
 - `GET /api/prices?hours=24`: one BTC price per minute from Mezo's own oracle.
 
-## Run it
+## Security and privacy
+
+- **Read-only.** Only view functions are called. No keys, no seed phrases, no transactions.
+- **Webhook authentication.** Telegram's secret header is compared in constant time; forged requests get a 401 before any work is done.
+- **Secrets** live only in Cloudflare secrets and a git-ignored `.env`. `wrangler.toml` holds none.
+- **Abuse limits.** Private chats only, 12 messages per chat per minute, 5 tracked addresses per chat, 100 in total, 30 API calls per minute per client. Users who block the bot are removed automatically.
+- **Web pages** run under a strict Content-Security-Policy: no inline scripts, no third-party code, no `eval`; API values are written into pages as text only. Framing is allowed only from Telegram's own web clients so the Mini App works.
+- **Data stored:** Telegram chat ID, the public address tracked, and the last alert state. `/untrack` deletes it.
+- `npm audit --omit=dev` reports 0 vulnerabilities.
+
+## Testing, and what is not claimed
+
+171 unit tests cover: the risk and queue maths; the Multicall codec against viem on random inputs; a simulated chain for the whole engine; the real D1 SQL on SQLite; the alert state machine; the bot's command handlers with Telegram faked; the pages and the browser scripts (the shipped files are run in Node and checked against hand-worked numbers); and config validation. The pages were also exercised in headless Chromium with the strict security headers, and the Worker in Cloudflare's local runtime. On testnet, `npm run system` and `npm run check` print this engine's numbers next to the contracts' own so any decoding problem shows up immediately.
+
+Honest limits:
+
+- Mezo **testnet** only. Mainnet needs its own addresses and a fresh verification.
+- Alert thresholds (watch below 150%, warning below 135%, urgent below 120%) are design defaults, not protocol values.
+- The liquidation-chance model is simple (see above).
+- Production CPU on Cloudflare's free plan is designed for and benchmarked in Node, not formally measured live.
+- Tripwire reads and advises. It does not execute transactions, by design.
+
+## Run it yourself
 
 ```bash
 npm install
-npm test            # risk math tests, no network needed
-npm run typecheck
-npm run check -- 0xYourTroveOwnerAddress     # one position, cross-checked against the contracts
-npm run system                                # whole protocol, cross-checked against the contracts
+npm test                                      # 171 tests, no network needed
+npm run check -- 0xYourWalletAddress          # one loan, cross-checked against the contracts
+npm run system                                # the whole protocol, cross-checked against the contracts
 ```
 
-### Run the bot locally
+Local bot (needs a token from @BotFather):
 
-1. Create a bot with @BotFather on Telegram and copy the token.
-2. `copy .env.example .env` (Windows) then put the token after `TELEGRAM_BOT_TOKEN=` in `.env`.
-3. `npm run bot`, then message your bot: /start, /track <address>, /status.
-
-### Hosted version (Cloudflare Workers, free plan)
-
-`src/worker.ts` is the hosted entry: Telegram sends messages to `/webhook`, and a cron trigger runs the monitor every minute. Tracked addresses live in Cloudflare D1 (`migrations/0001_init.sql`).
-
+```bash
+cp .env.example .env          # then paste the token after TELEGRAM_BOT_TOKEN=
+npm run bot
 ```
+
+Hosted (Cloudflare Workers free plan):
+
+```bash
 npx wrangler login
-npx wrangler d1 create trove-guardian        # paste the database_id into wrangler.toml
+npx wrangler d1 create trove-guardian          # paste the database_id into wrangler.toml
 npx wrangler d1 migrations apply trove-guardian --remote
 npx wrangler deploy
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put WEBHOOK_SECRET
-npm run set-webhook -- https://trove-guardian.<your-subdomain>.workers.dev
-npm run webhook-info                          # check Telegram is happy
-npx wrangler tail                             # live logs
-npm run clear-webhook                         # go back to local polling
+npm run set-webhook -- https://your-worker.your-name.workers.dev
 ```
 
-### Landing page
+Set `BOT_USERNAME`, `REPO_URL` and `SITE_URL` in `wrangler.toml` to link the pages and enable the Mini App buttons. `DEMO_PRICE_DROP_PCT` pretends BTC is lower so alerts can be shown on a healthy loan (every message is labelled DEMO MODE); leave it blank normally.
 
-`GET /` on the Worker serves a single static page (`src/landing.ts`): no scripts, no remote resources, system fonts, light and dark mode. The collateral-ratio ruler is drawn from the same tier thresholds the bot uses. Set `BOT_USERNAME` and `REPO_URL` in `wrangler.toml` `[vars]`. The Telegram button and repo link are left out if the values are missing or unsafe.
+## Roadmap
 
-## Security model
+- An optional, non-custodial **rescue**: pre-approved top-ups that only the owner can authorise.
+- More languages (French, Spanish, Portuguese first), reviewed by native speakers because these are safety messages.
+- Mainnet support.
 
-- **Read-only.** The bot only calls view functions on the Mezo contracts. It holds no keys, never asks for a seed phrase or private key, and cannot send transactions. Every action is a link to the Mezo app.
-- **Webhook authentication.** Telegram sends a secret header with each update. The Worker compares it in constant time and returns 401 before doing any work or making any outgoing call.
-- **Secrets.** The bot token and webhook secret live only in Cloudflare secrets and a git-ignored `.env`. `wrangler.toml` contains no secrets.
-- **Abuse limits.** Private chats only. 12 messages per chat per minute (one polite warning, then silence). At most 5 tracked addresses per chat and 25 in total (`MAX_TOTAL_TROVES`). Users who block the bot are removed automatically.
-- **Input handling.** Addresses are validated and checksummed before use. All chain and Telegram errors are caught, and users only see generic messages.
-- **Data stored.** Telegram chat ID, the public address tracked, and the last alert state (tier, redemption flag, timestamp). Nothing else. `/untrack` deletes it.
-- **Dashboard.** Strict CSP (`script-src 'self'`, `connect-src 'self'`, no inline script), and framing allowed only from Telegram's own web clients so the Mini App works there.
-- **Landing page.** Served with `Content-Security-Policy: default-src 'none'` (inline styles and the data-URI favicon only), `nosniff`, no referrer, and `frame-ancestors 'none'`.
-- **Dependencies.** `npm audit --omit=dev` reports 0 vulnerabilities. Known warnings are in dev-only test tooling that is never deployed.
-- **Limits of this build.** It targets Mezo testnet. The alert thresholds are design defaults, not protocol values. Recovery Mode is shown as a flag only.
+## License
 
-### Demo mode
-
-To see alerts fire on a healthy position, set `DEMO_PRICE_DROP_PCT=40` (and optionally `POLL_SECONDS=15`) in `.env` and restart. The monitor then pretends BTC is 40% lower, and every message is labelled `DEMO MODE`. Leave it blank for real use.
-
-The bot token is a secret. `.env` is git-ignored. Never paste the token anywhere public.
-
-`npm run check` and `npm run system` need network access to `https://rpc.test.mezo.org`. They print the engine's numbers next to the contracts' own (trove count, system ratio, Stability Pool, ratio) so any decoding problem shows up immediately.
-
-## What was verified from the MUSD source (mezo-org/musd)
-
-- Chain ID 31611 (Matsnet testnet), RPC `https://rpc.test.mezo.org`.
-- MCR is 110% and CCR is 150% (`LiquityBase.sol`).
-- Redemptions start at the lowest-ratio trove, skip loans under 110%, and redeem debt net of the 200 MUSD gas compensation.
-- Recovery Mode does not change the liquidation line (Mezo docs); it only blocks new loans below 150%.
-- Closed troves leave the owners array, so Multicall enumeration sees only active loans.
-- Function signatures in `src/abi.ts` match `ITroveManager`, `ISortedTroves`, `IPriceFeed`.
-- Testnet addresses in `src/config.ts` come from the repo's deployment artifacts. Re-check them against the Mezo docs.
-
-## Assumptions to confirm
-
-- Tier thresholds (urgent below 120%, warning below 135%, watch below 150%, 3-point hysteresis) are design defaults, not protocol values.
-- MUSD and BTC are treated as 18-decimal values.
+MIT
