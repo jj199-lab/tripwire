@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 160" width="700" height="160" role="img" aria-label="Tripwire">
+<g transform="translate(14 14) scale(0.2734)">
+<rect width="512" height="512" rx="112" fill="#18213a"/>
+<defs><clipPath id="c"><rect x="64" y="160" width="384" height="192" rx="36"/></clipPath></defs>
+<g clip-path="url(#c)">
+<rect x="64" y="160" width="96" height="192" fill="#c2334a"/>
+<rect x="160" y="160" width="96" height="192" fill="#ea9144"/>
+<rect x="256" y="160" width="192" height="192" fill="#3bb47d"/>
+</g>
+<line x1="256" y1="100" x2="256" y2="412" stroke="#18213a" stroke-width="48" stroke-linecap="round"/>
+<line x1="256" y1="100" x2="256" y2="412" stroke="#ffffff" stroke-width="26" stroke-linecap="round"/>
+</g>
+<text x="172" y="107" font-family="ui-serif,'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="84" font-weight="600" letter-spacing="-1" fill="#18213a">Tripwire</text>
+</svg>
