@@ -1,0 +1,31 @@
+{
+  "name": "tripwire",
+  "version": "0.1.0",
+  "description": "Tripwire: plan, watch and protect a Mezo MUSD loan (Telegram bot, web dashboard and API)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "check": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "bot": "tsx --env-file=.env src/bot.ts",
+    "deploy": "wrangler deploy",
+    "dev:worker": "wrangler dev",
+    "set-webhook": "tsx --env-file=.env src/scripts/webhook.ts",
+    "clear-webhook": "tsx --env-file=.env src/scripts/webhook.ts --clear",
+    "webhook-info": "tsx --env-file=.env src/scripts/webhook.ts --info",
+    "system": "tsx --env-file=.env src/system-cli.ts"
+  },
+  "dependencies": {
+    "grammy": "^1.46.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "wrangler": "^4.151.2"
+  }
+}

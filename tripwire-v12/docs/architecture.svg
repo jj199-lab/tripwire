@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 660" width="1280" height="660" role="img" aria-labelledby="t d">
+<title id="t">Tripwire architecture</title>
+<desc id="d">People use the Telegram bot and the web pages. Both talk to a Cloudflare Worker, which keeps its data in Cloudflare D1 and reads Mezo testnet through Multicall3. A cron trigger runs the monitor every minute and sends Telegram alerts.</desc>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#18213a"/></marker>
+<style>
+text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;fill:#18213a}
+.serif{font-family:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.h{font-size:19px;font-weight:700}
+.b{font-size:15px;font-weight:600}
+.s{font-size:13.5px;fill:#525d78}
+.box{fill:#fff;stroke:#c9d1de;stroke-width:1.5}
+.comp{fill:#f6f8fb;stroke:#c9d1de;stroke-width:1.5}
+.line{stroke:#18213a;stroke-width:2;fill:none}
+.lbl{font-size:13px;font-weight:600;fill:#1b6fb5}
+</style>
+</defs>
+<rect width="1280" height="660" fill="#edf1f5"/>
+<text x="40" y="52" class="serif" font-size="32" font-weight="600">Tripwire</text>
+<text x="40" y="80" class="s" font-size="16">Plan, watch and fix a Mezo MUSD loan. Everything is read-only: no keys, no transactions.</text>
+
+<!-- People -->
+<rect x="40" y="130" width="250" height="190" rx="14" class="box"/>
+<text x="60" y="162" class="h">People</text>
+<rect x="60" y="180" width="210" height="46" rx="10" class="comp"/>
+<text x="76" y="209" class="b">Telegram bot</text>
+<rect x="60" y="244" width="210" height="58" rx="10" class="comp"/>
+<text x="76" y="268" class="b">Web pages</text>
+<text x="76" y="288" class="s">planner and dashboard</text>
+
+<!-- Worker -->
+<rect x="350" y="110" width="500" height="520" rx="14" class="box" style="stroke:#18213a;stroke-width:2"/>
+<text x="372" y="144" class="h">Cloudflare Worker (free plan)</text>
+<rect x="372" y="164" width="456" height="92" rx="10" class="comp"/>
+<text x="390" y="194" class="b">Telegram webhook</text>
+<text x="390" y="217" class="s">/track  /status  /plan  /simulate</text>
+<text x="390" y="238" class="s">Open dashboard and planner as Mini Apps</text>
+<rect x="372" y="274" width="456" height="92" rx="10" class="comp"/>
+<text x="390" y="304" class="b">Web pages and public API</text>
+<text x="390" y="327" class="s">/plan   /p   /api/system   /api/plan   /api/position</text>
+<text x="390" y="348" class="s">Strict security policy, no third-party code</text>
+<rect x="372" y="384" width="456" height="92" rx="10" class="comp"/>
+<text x="390" y="414" class="b">Monitor (cron, every minute)</text>
+<text x="390" y="437" class="s">Alerts when a loan changes tier or nears the redemption front</text>
+<text x="390" y="458" class="s">Rate-limited, private chats only</text>
+<rect x="372" y="494" width="456" height="112" rx="10" class="comp"/>
+<text x="390" y="524" class="b">Engine</text>
+<text x="390" y="547" class="s">Multicall reader: the whole protocol in about 5 requests</text>
+<text x="390" y="568" class="s">Redemption queue and Stability Pool maths</text>
+<text x="390" y="589" class="s">Mezo's loan rules, read live from the contracts</text>
+
+<!-- D1 -->
+<rect x="960" y="110" width="280" height="210" rx="14" class="box"/>
+<text x="980" y="144" class="h">Cloudflare D1</text>
+<text x="980" y="178" class="s">Tracked loans and alert state</text>
+<text x="980" y="206" class="s">Protocol snapshot (every 5 min)</text>
+<text x="980" y="234" class="s">BTC price (every minute)</text>
+<text x="980" y="274" class="s" font-style="italic">Stores no keys or personal data</text>
+
+<!-- Mezo -->
+<rect x="960" y="400" width="280" height="230" rx="14" class="box"/>
+<text x="980" y="434" class="h">Mezo testnet</text>
+<text x="980" y="462" class="s">TroveManager, PriceFeed,</text>
+<text x="980" y="483" class="s">StabilityPool,</text>
+<text x="980" y="504" class="s">BorrowerOperations,</text>
+<text x="980" y="525" class="s">InterestRateManager</text>
+<text x="980" y="562" class="b">Multicall3</text>
+<text x="980" y="584" class="s">many reads, one request</text>
+<text x="980" y="614" class="s" font-style="italic">View calls only</text>
+
+<!-- arrows -->
+<path class="line" d="M270 203 L372 203" marker-end="url(#a)"/>
+<text x="279" y="182" class="lbl">commands</text>
+<path class="line" d="M270 273 L372 320" marker-end="url(#a)"/>
+<text x="296" y="284" class="lbl" transform="rotate(14 296 284)">pages</text>
+<path class="line" d="M372 438 L330 438 L330 340 L270 316" marker-end="url(#a)"/>
+<text x="268" y="410" class="lbl">alerts</text>
+<path class="line" d="M850 210 L960 210" marker-start="url(#a)" marker-end="url(#a)"/>
+<path class="line" d="M850 550 L960 516" marker-end="url(#a)"/>
+<text x="872" y="552" class="lbl" transform="rotate(-17 872 552)">read-only</text>
+</svg>
